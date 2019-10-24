@@ -13,10 +13,10 @@ import fileinput
 import torch
 
 from fairseq import checkpoint_utils, options, tasks, utils
-from fairseq.data import encoders
+from fairseq.data import data_utils, encoders
 
 
-Batch = namedtuple('Batch', 'ids src_tokens src_lengths tgt_constraints')
+Batch = namedtuple('Batch', 'ids src_tokens src_lengths tgt_init_tokens')
 Translation = namedtuple('Translation', 'src_str hypos pos_scores alignments')
 
 
@@ -33,21 +33,19 @@ def buffered_read(input, buffer_size):
         yield buffer
 
 
-def make_batches(lines, args, task, max_positions, encode_fn, constraint_lists=[]):
+def make_batches(lines, args, task, max_positions, encode_fn, init_outputs_list=[]):
     tokens = [
         task.source_dictionary.encode_line(
             encode_fn(src_str), add_if_not_exist=False
         ).long()
         for src_str in lines
     ]
-    constraints = []
-    for constraint_strs in constraint_lists:
-        line_constraints = []
-        for s in constraint_strs:
-            line_constraints.append(task.target_dictionary.encode_line(
-                                        encode_fn(s), add_if_not_exist=False, append_eos=False,
-                                   ).long())
-        constraints.append(line_constraints)
+    init_outputs = []
+    for init_output_strs in init_outputs_list:
+        line_init_outputs = " ".join(init_output_strs)
+        init_outputs.append(task.target_dictionary.encode_line(
+                                encode_fn(line_init_outputs), add_if_not_exist=False, append_bos=True
+                           ).long())
     lengths = torch.LongTensor([t.numel() for t in tokens])
     itr = task.get_batch_iterator(
         dataset=task.build_dataset_for_inference(tokens, lengths),
@@ -59,7 +57,10 @@ def make_batches(lines, args, task, max_positions, encode_fn, constraint_lists=[
         yield Batch(
             ids=batch['id'],
             src_tokens=batch['net_input']['src_tokens'], src_lengths=batch['net_input']['src_lengths'],
-            tgt_constraints=[constraints[idx] for idx in batch['id']]
+            tgt_init_tokens=data_utils.collate_tokens(
+                [init_outputs[idx] for idx in batch['id']],
+                task.target_dictionary.pad(), task.target_dictionary.eos()
+            )
         )
 
 
@@ -154,7 +155,7 @@ def main(args):
         for batch in make_batches(new_inputs, args, task, max_positions, encode_fn, constraints):
             src_tokens = batch.src_tokens
             src_lengths = batch.src_lengths
-            tgt_constraints = batch.tgt_constraints
+            tgt_init_tokens = batch.tgt_init_tokens
             if use_cuda:
                 src_tokens = src_tokens.cuda()
                 src_lengths = src_lengths.cuda()
@@ -163,7 +164,7 @@ def main(args):
                 'net_input': {
                     'src_tokens': src_tokens,
                     'src_lengths': src_lengths,
-                    'tgt_constraints': tgt_constraints
+                    'tgt_init_tokens': tgt_init_tokens,
                 },
             }
 

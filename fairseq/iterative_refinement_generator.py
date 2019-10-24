@@ -60,6 +60,7 @@ class IterativeRefinementGenerator(object):
         # TODO: better encoder inputs?
         src_tokens = sample['net_input']['src_tokens']
         src_lengths = sample['net_input']['src_lengths']
+        tgt_init_tokens = sample['net_input']['tgt_init_tokens']
         bsz, src_len = src_tokens.size()
         sent_idxs = torch.arange(bsz, device=src_tokens.device)
 
@@ -68,7 +69,7 @@ class IterativeRefinementGenerator(object):
 
         # initialize buffers (very model specific, with length prediction or not)
         prev_decoder_out = model.initialize_output_tokens(
-            encoder_out, src_tokens)
+            encoder_out, src_tokens, tgt_init_tokens)
         prev_out_tokens = prev_decoder_out['output_tokens'].clone()
 
         finalized = [[] for _ in range(bsz)]

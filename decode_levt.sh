@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=0 python interactive_with_constraints.py \
+CUDA_VISIBLE_DEVICES= python interactive_with_constraints.py \
     data-bin/wmt14_en_de_distill \
     --task translation_lev \
     --path checkpoints/checkpoint_best.pt \

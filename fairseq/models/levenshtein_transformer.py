@@ -432,10 +432,13 @@ class LevenshteinTransformerModel(TransformerModel):
             "attn": attn,
         }
 
-    def initialize_output_tokens(self, encoder_out, src_tokens):
-        initial_output_tokens = src_tokens.new_zeros(src_tokens.size(0), 2)
-        initial_output_tokens[:, 0] = self.bos
-        initial_output_tokens[:, 1] = self.eos
+    def initialize_output_tokens(self, encoder_out, src_tokens, pre_output_tokens=None):
+        if pre_output_tokens is None:
+            initial_output_tokens = src_tokens.new_zeros(src_tokens.size(0), 2)
+            initial_output_tokens[:, 0] = self.bos
+            initial_output_tokens[:, 1] = self.eos
+        else:
+            initial_output_tokens = pre_output_tokens.clone()
 
         initial_output_scores = initial_output_tokens.new_zeros(
             *initial_output_tokens.size()
@@ -444,7 +447,7 @@ class LevenshteinTransformerModel(TransformerModel):
         initial_attn = None
         if getattr(self.decoder.layers[-1], "need_attn", False):
             initial_attn = initial_output_tokens.new_zeros(
-                src_tokens.size(0), 2, src_tokens.size(1)
+                src_tokens.size(0), initial_output_tokens.size(1), src_tokens.size(1)
             )
         return {
             "output_tokens": initial_output_tokens,

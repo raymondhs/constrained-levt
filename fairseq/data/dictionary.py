@@ -245,13 +245,19 @@ class Dictionary(object):
         return t
 
     def encode_line(self, line, line_tokenizer=tokenize_line, add_if_not_exist=True,
-                    consumer=None, append_eos=True, reverse_order=False):
+                    consumer=None, append_eos=True, reverse_order=False, append_bos=False):
         words = line_tokenizer(line)
         if reverse_order:
             words = list(reversed(words))
         nwords = len(words)
-        ids = torch.IntTensor(nwords + 1 if append_eos else nwords)
+        if append_bos:
+            nwords += 1
+        if append_eos:
+            nwords += 1
+        ids = torch.IntTensor(nwords)
 
+        if append_bos:
+            ids[0] = self.bos_index
         for i, word in enumerate(words):
             if add_if_not_exist:
                 idx = self.add_symbol(word)
@@ -259,9 +265,9 @@ class Dictionary(object):
                 idx = self.index(word)
             if consumer is not None:
                 consumer(word, idx)
-            ids[i] = idx
+            ids[i+int(append_bos)] = idx
         if append_eos:
-            ids[nwords] = self.eos_index
+            ids[nwords-1] = self.eos_index
         return ids
 
     @staticmethod
