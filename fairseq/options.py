@@ -511,6 +511,14 @@ def add_generation_args(parser):
 
     # special decoding format for advanced decoding.
     group.add_argument('--decoding-format', default=None, type=str, choices=['unigram', 'ensemble', 'vote', 'dp', 'bs'])
+
+    # constraint decoding
+    group.add_argument(
+            "--no-delete-constraint",
+            action='store_true',
+            help='disallow constrained token deletion'
+    )
+
     # fmt: on
     return group
 

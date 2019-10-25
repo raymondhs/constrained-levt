@@ -142,7 +142,7 @@ def _get_del_ins_targets(in_tokens, out_tokens, padding_idx):
 
 
 def _apply_ins_masks(
-    in_tokens, in_scores, mask_ins_pred, padding_idx, unk_idx, eos_idx
+    in_tokens, in_scores, mask_ins_pred, padding_idx, unk_idx, eos_idx, in_constraint=None
 ):
 
     in_masks = in_tokens.ne(padding_idx)
@@ -175,7 +175,14 @@ def _apply_ins_masks(
         out_scores[:, 0] = in_scores[:, 0]
         out_scores.scatter_(1, reordering, in_scores[:, 1:])
 
-    return out_tokens, out_scores
+    # update constraint mask
+    out_constraint = None
+    if in_constraint is not None:
+        out_constraint = in_constraint.new_zeros(*out_tokens.size())
+        out_constraint[:, 0] = in_constraint[:, 0]
+        out_constraint.scatter_(1, reordering, in_constraint[:, 1:])
+
+    return out_tokens, out_scores, out_constraint
 
 
 def _apply_ins_words(in_tokens, in_scores, word_ins_pred, word_ins_scores, unk_idx):
@@ -193,11 +200,14 @@ def _apply_ins_words(in_tokens, in_scores, word_ins_pred, word_ins_scores, unk_i
 
 
 def _apply_del_words(
-    in_tokens, in_scores, in_attn, word_del_pred, padding_idx, bos_idx, eos_idx
+    in_tokens, in_scores, in_attn, word_del_pred, padding_idx, bos_idx, eos_idx, in_constraint=None
 ):
     # apply deletion to a tensor
     in_masks = in_tokens.ne(padding_idx)
-    bos_eos_masks = in_tokens.eq(bos_idx) | in_tokens.eq(eos_idx)
+    if in_constraint is None:
+        bos_eos_masks = in_tokens.eq(bos_idx) | in_tokens.eq(eos_idx)
+    else:
+        bos_eos_masks = in_constraint
 
     max_len = in_tokens.size(1)
     word_del_pred.masked_fill_(~in_masks, 1)
@@ -221,7 +231,12 @@ def _apply_del_words(
         _reordering = reordering[:, :, None].expand_as(in_attn)
         out_attn = in_attn.masked_fill(_mask, 0.).gather(1, _reordering)
 
-    return out_tokens, out_scores, out_attn
+    # update constraint mask
+    out_constraint = None
+    if in_constraint is not None:
+        out_constraint = in_constraint.gather(1, reordering)
+
+    return out_tokens, out_scores, out_attn, out_constraint
 
 
 @register_model("levenshtein_transformer")
@@ -334,12 +349,13 @@ class LevenshteinTransformerModel(TransformerModel):
         return self.encoder(*encoder_inputs)
 
     def forward_decoder(
-        self, decoder_out, encoder_out, eos_penalty=0.0, max_ratio=None, **kwargs
+        self, decoder_out, encoder_out, eos_penalty=0.0, max_ratio=None, no_delete_constraint=False, **kwargs
     ):
 
         output_tokens = decoder_out["output_tokens"]
         output_scores = decoder_out["output_scores"]
         attn = decoder_out["attn"]
+        constraint = decoder_out["constraint"] if no_delete_constraint else None
 
         bsz = output_tokens.size(0)
         if max_ratio is None:
@@ -353,8 +369,9 @@ class LevenshteinTransformerModel(TransformerModel):
             max_lens = (src_lens * max_ratio).clamp(min=10).long()
 
         # delete words
-        # do not delete tokens if it is <s> </s>
-        can_del_word = output_tokens.ne(self.pad).sum(1) > 2
+        # do not delete tokens if it is <s> </s> or constraint tokens
+        num_cannot_del = constraint.sum(1) if constraint is not None else 2
+        can_del_word = output_tokens.ne(self.pad).sum(1) > num_cannot_del
         if can_del_word.sum() != 0:  # we cannot delete, skip
             word_del_out, word_del_attn = self.decoder.forward_word_del(
                 _skip(output_tokens, can_del_word), _skip(encoder_out, can_del_word)
@@ -362,7 +379,7 @@ class LevenshteinTransformerModel(TransformerModel):
             word_del_score = F.log_softmax(word_del_out, 2)
             word_del_pred = word_del_score.max(-1)[1].bool()
 
-            _tokens, _scores, _attn = _apply_del_words(
+            _tokens, _scores, _attn, constraint = _apply_del_words(
                 output_tokens[can_del_word],
                 output_scores[can_del_word],
                 word_del_attn,
@@ -370,6 +387,7 @@ class LevenshteinTransformerModel(TransformerModel):
                 self.pad,
                 self.bos,
                 self.eos,
+                constraint,
             )
             output_tokens = _fill(output_tokens, can_del_word, _tokens, self.pad)
             output_scores = _fill(output_scores, can_del_word, _scores, 0)
@@ -389,13 +407,14 @@ class LevenshteinTransformerModel(TransformerModel):
                 mask_ins_pred, max_lens[can_ins_mask, None].expand_as(mask_ins_pred)
             )
 
-            _tokens, _scores = _apply_ins_masks(
+            _tokens, _scores, constraint = _apply_ins_masks(
                 output_tokens[can_ins_mask],
                 output_scores[can_ins_mask],
                 mask_ins_pred,
                 self.pad,
                 self.unk,
                 self.eos,
+                constraint
             )
             output_tokens = _fill(output_tokens, can_ins_mask, _tokens, self.pad)
             output_scores = _fill(output_scores, can_ins_mask, _scores, 0)
@@ -425,11 +444,13 @@ class LevenshteinTransformerModel(TransformerModel):
         cut_off = output_tokens.ne(self.pad).sum(1).max()
         output_tokens = output_tokens[:, :cut_off]
         output_scores = output_scores[:, :cut_off]
+        constraint = None if constraint is None else constraint[:, :cut_off]
         attn = None if attn is None else attn[:, :cut_off, :]
         return {
             "output_tokens": output_tokens,
             "output_scores": output_scores,
             "attn": attn,
+            "constraint": constraint,
         }
 
     def initialize_output_tokens(self, encoder_out, src_tokens, pre_output_tokens=None):
@@ -449,10 +470,12 @@ class LevenshteinTransformerModel(TransformerModel):
             initial_attn = initial_output_tokens.new_zeros(
                 src_tokens.size(0), initial_output_tokens.size(1), src_tokens.size(1)
             )
+        initial_constraint = initial_output_tokens.ne(self.pad)
         return {
             "output_tokens": initial_output_tokens,
             "output_scores": initial_output_scores,
             "attn": initial_attn,
+            "constraint": initial_constraint
         }
 
 

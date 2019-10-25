@@ -6,4 +6,5 @@ CUDA_VISIBLE_DEVICES= python interactive_with_constraints.py \
     --iter-decode-eos-penalty 0 \
     --beam 1 --remove-bpe \
     --print-step \
-    --batch-size 400 --buffer-size 1000
+    --batch-size 400 --buffer-size 1000 \
+    --no-delete-constraint
