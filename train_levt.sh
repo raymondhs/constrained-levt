@@ -1,6 +1,6 @@
 fairseq-train \
     data-bin/wmt14_en_de_distill \
-    --save-dir checkpoints \
+    --save-dir checkpoints/levenshtein_transformer \
     --ddp-backend=no_c10d \
     --task translation_lev \
     --criterion nat_loss \
@@ -19,5 +19,6 @@ fairseq-train \
     --fixed-validation-seed 7 \
     --max-tokens 8000 \
     --save-interval-updates 10000 \
+    --no-epoch-checkpoints \
     --max-update 300000 \
     --fp16 --update-freq 2

@@ -62,7 +62,9 @@ class IterativeRefinementGenerator(object):
         # TODO: better encoder inputs?
         src_tokens = sample['net_input']['src_tokens']
         src_lengths = sample['net_input']['src_lengths']
-        tgt_init_tokens = sample['net_input']['tgt_init_tokens']
+        tgt_init_tokens = None
+        if 'tgt_init_tokens' in sample['net_input']:
+            tgt_init_tokens = sample['net_input']['tgt_init_tokens']
         bsz, src_len = src_tokens.size()
         sent_idxs = torch.arange(bsz, device=src_tokens.device)
 
