@@ -5,6 +5,7 @@
 
 import torch
 
+from fairseq import utils
 from fairseq.models.model_utils import skip_tensors as _skip
 from fairseq.models.nonautoregressive_ensembles import EnsembleLevT
 from fairseq.models.levenshtein_transformer import LevenshteinTransformerModel
@@ -91,7 +92,7 @@ class IterativeRefinementGenerator(object):
                 x = torch.cat([x, y.new_zeros(b, l_y - l_x).fill_(self.pad)], 1)
             return (x == y).all(1), y, s, a, c
 
-        def finalized_hypos(step, prev_out_token, prev_out_score, prev_out_attn, prev_out_constraint):
+        def finalized_hypos(step, prev_out_token, prev_out_score, prev_out_attn, prev_out_constraint, src_tokens):
             cutoff = prev_out_token.ne(self.pad)
             tokens = prev_out_token[cutoff]
             scores = prev_out_score[cutoff]
@@ -102,7 +103,12 @@ class IterativeRefinementGenerator(object):
                 hypo_attn, alignment = None, None
             else:
                 hypo_attn = prev_out_attn[cutoff]
-                alignment = hypo_attn.max(dim=1)[1]
+                alignment = utils.extract_hard_alignment(hypo_attn, src_tokens, tokens, self.pad, self.eos)
+                # src_indices = hypo_attn.max(dim=1)[1]
+                #for tgt_idx, src_idx in zip(tokens, src_indices):
+                #    alignment.append((src_token_to_word[src_idx.item()] - 1, tgt_token_to_word[tgt_idx.item()] - 1))
+
+            # print(hypo_attn.size(), alignment)
             return {
                 'steps': step,
                 'tokens': tokens,
@@ -160,7 +166,8 @@ class IterativeRefinementGenerator(object):
                         finalized_tokens[i],
                         finalized_scores[i],
                         None if finalized_attn is None else finalized_attn[i],
-                        None if finalized_constraint is None else finalized_constraint[i]
+                        None if finalized_constraint is None else finalized_constraint[i],
+                        src_tokens[i]
                     )
                 ]
             # check if all terminated

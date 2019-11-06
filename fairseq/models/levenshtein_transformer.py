@@ -551,6 +551,7 @@ class LevenshteinTransformerDecoder(TransformerDecoder):
         decoder_padding_mask = prev_output_tokens.eq(self.padding_idx)
         layers = self.layers if layers is None else layers
         early_exit = len(layers) if early_exit is None else early_exit
+        first_attn = None
         for _, layer in enumerate(layers[: early_exit]):
             x, attn = layer(
                 x,
@@ -561,6 +562,8 @@ class LevenshteinTransformerDecoder(TransformerDecoder):
                 self_attn_mask=None,
                 self_attn_padding_mask=decoder_padding_mask,
             )
+            if first_attn is None:
+                first_attn = attn
             inner_states.append(x)
 
         if self.layer_norm:
@@ -572,7 +575,7 @@ class LevenshteinTransformerDecoder(TransformerDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return x, {"attn": attn, "inner_states": inner_states}
+        return x, {"attn": first_attn, "inner_states": inner_states}
 
     def forward_mask_ins(self, prev_output_tokens, encoder_out=None, **unused):
         features, extra = self.extract_features(
