@@ -104,11 +104,6 @@ class IterativeRefinementGenerator(object):
             else:
                 hypo_attn = prev_out_attn[cutoff]
                 alignment = utils.extract_hard_alignment(hypo_attn, src_tokens, tokens, self.pad, self.eos)
-                # src_indices = hypo_attn.max(dim=1)[1]
-                #for tgt_idx, src_idx in zip(tokens, src_indices):
-                #    alignment.append((src_token_to_word[src_idx.item()] - 1, tgt_token_to_word[tgt_idx.item()] - 1))
-
-            # print(hypo_attn.size(), alignment)
             return {
                 'steps': step,
                 'tokens': tokens,
@@ -167,7 +162,7 @@ class IterativeRefinementGenerator(object):
                         finalized_scores[i],
                         None if finalized_attn is None else finalized_attn[i],
                         None if finalized_constraint is None else finalized_constraint[i],
-                        src_tokens[i]
+                        src_tokens[finalized_idxs[i]]
                     )
                 ]
             # check if all terminated
