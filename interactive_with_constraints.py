@@ -14,6 +14,7 @@ import torch
 
 from fairseq import checkpoint_utils, options, tasks, utils
 from fairseq.data import data_utils, encoders
+from fairseq.meters import StopwatchMeter
 
 
 Batch = namedtuple('Batch', 'ids src_tokens src_lengths tgt_init_tokens')
@@ -36,7 +37,7 @@ def buffered_read(input, buffer_size):
 def make_batches(lines, args, task, max_positions, encode_fn, init_outputs_list=[]):
     tokens = [
         task.source_dictionary.encode_line(
-            encode_fn(src_str), add_if_not_exist=False
+            encode_fn(src_str), add_if_not_exist=False, append_bos=args.task == 'translation_lev',
         ).long()
         for src_str in lines
     ]
@@ -141,6 +142,7 @@ def main(args):
         print('| Sentence buffer size:', args.buffer_size)
     print('| Type the input sentence and press return:')
     start_id = 0
+    gen_timer = StopwatchMeter()
     for inputs in buffered_read(args.input, args.buffer_size):
         results = []
 
@@ -159,6 +161,7 @@ def main(args):
             if use_cuda:
                 src_tokens = src_tokens.cuda()
                 src_lengths = src_lengths.cuda()
+                tgt_init_tokens = tgt_init_tokens.cuda()
 
             sample = {
                 'net_input': {
@@ -167,8 +170,10 @@ def main(args):
                     'tgt_init_tokens': tgt_init_tokens,
                 },
             }
-
+            gen_timer.start()
             translations = task.inference_step(generator, models, sample)
+            num_generated_tokens = sum(len(h[0]['tokens']) for h in translations)
+            gen_timer.stop(num_generated_tokens)
             for i, (id, hypos) in enumerate(zip(batch.ids.tolist(), translations)):
                 src_tokens_i = utils.strip_pad(src_tokens[i], tgt_dict.pad())
                 results.append((start_id + id, src_tokens_i, hypos))
@@ -204,6 +209,8 @@ def main(args):
 
         # update running id counter
         start_id += len(inputs)
+    print('| Translated {} sentences ({} tokens) in {:.1f}s ({:.2f} sentences/s, {:.2f} tokens/s)'.format(
+        start_id, gen_timer.n, gen_timer.sum, start_id / gen_timer.sum, 1. / gen_timer.avg))
 
 
 def cli_main():
