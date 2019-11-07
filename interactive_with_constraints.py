@@ -14,6 +14,7 @@ import torch
 
 from fairseq import checkpoint_utils, options, tasks, utils
 from fairseq.data import data_utils, encoders
+from fairseq.meters import StopwatchMeter
 
 
 Batch = namedtuple('Batch', 'ids src_tokens src_lengths tgt_init_tokens')
@@ -141,6 +142,7 @@ def main(args):
         print('| Sentence buffer size:', args.buffer_size)
     print('| Type the input sentence and press return:')
     start_id = 0
+    gen_timer = StopwatchMeter()
     for inputs in buffered_read(args.input, args.buffer_size):
         results = []
 
@@ -159,6 +161,7 @@ def main(args):
             if use_cuda:
                 src_tokens = src_tokens.cuda()
                 src_lengths = src_lengths.cuda()
+                tgt_init_tokens = tgt_init_tokens.cuda()
 
             sample = {
                 'net_input': {
