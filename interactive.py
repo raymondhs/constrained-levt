@@ -179,7 +179,8 @@ def main(args):
                     ' '.join(map(lambda x: '{:.4f}'.format(x), hypo['positional_scores'].tolist()))
                 ))
                 if args.print_alignment:
-                    alignment_str = " ".join(["{}-{}".format(src_dict[src_tokens[src]], tgt_dict[hypo_tokens[tgt]]) for src, tgt in alignment])
+                    # alignment_str = " ".join(["{}-{}".format(src_dict[src_tokens[src]], tgt_dict[hypo_tokens[tgt]]) for src, tgt in alignment])
+                    alignment_str = " ".join(["{}-{}".format(src, tgt) for src, tgt in alignment])
                     print('A-{}\t{}'.format(
                         id,
                         alignment_str

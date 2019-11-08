@@ -146,13 +146,13 @@ def main(args):
     for inputs in buffered_read(args.input, args.buffer_size):
         results = []
 
-        # input is sentence \t constraint_phrase_1 \t constraint_phrase_2 ...
+        # input is sentence \t s1|||t1 \t s2|||t2 ...
         new_inputs = []
         constraints = []
         for inp in inputs:
             inp = inp.split('\t')
             new_inputs.append(inp[0])
-            constraints.append(inp[1:])
+            constraints.append([tup.split('|||')[1] for tup in inp[1:]])
 
         for batch in make_batches(new_inputs, args, task, max_positions, encode_fn, constraints):
             src_tokens = batch.src_tokens
