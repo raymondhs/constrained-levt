@@ -11,4 +11,14 @@ SPACE_NORMALIZER = re.compile(r"\s+")
 def tokenize_line(line):
     line = SPACE_NORMALIZER.sub(" ", line)
     line = line.strip()
+    if all(['|' in w for w in line.split()]):
+        toks = [t.split('|') for t in line.split()]
+        # remove factors
+        return ['|'.join(t[:-1]) for t in toks]
     return line.split()
+
+def get_factors(line):
+    line = SPACE_NORMALIZER.sub(" ", line)
+    line = line.strip()
+    toks = [t.split('|') for t in line.split()]
+    return [int(t[-1]) for t in toks]

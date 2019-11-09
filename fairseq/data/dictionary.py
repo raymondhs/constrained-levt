@@ -9,7 +9,7 @@ import os
 
 import torch
 
-from fairseq.tokenizer import tokenize_line
+from fairseq.tokenizer import tokenize_line, get_factors
 from fairseq.binarizer import safe_readline
 from fairseq.data import data_utils
 
@@ -269,6 +269,26 @@ class Dictionary(object):
         if append_eos:
             ids[nwords-1] = self.eos_index
         return ids
+
+    def encode_factors(self, line, line_tokenizer=get_factors, add_if_not_exist=True,
+                       consumer=None, append_eos=True, reverse_order=False, append_bos=False, return_factors=False):
+        words = line_tokenizer(line)
+        if reverse_order:
+            words = list(reversed(words))
+        nwords = len(words)
+        if append_bos:
+            nwords += 1
+        if append_eos:
+            nwords += 1
+        factor_tensor = torch.IntTensor(nwords)
+
+        if append_bos:
+            factor_tensor[0] = 1
+        for i, word in enumerate(words):
+            factor_tensor[i+int(append_bos)] = word
+        if append_eos:
+            factor_tensor[nwords-1] = 1
+        return factor_tensor
 
     @staticmethod
     def _add_file_to_dictionary_single_worker(filename, tokenize, eos_word, worker_id=0, num_workers=1):

@@ -6,7 +6,7 @@
 from collections import Counter
 import os
 
-from fairseq.tokenizer import tokenize_line
+from fairseq.tokenizer import tokenize_line, get_factors
 
 
 def safe_readline(f):
@@ -51,6 +51,32 @@ class Binarizer:
                 consumer(ids)
                 line = f.readline()
         return {'nseq': nseq, 'nunk': sum(replaced.values()), 'ntok': ntok, 'replaced': replaced}
+
+    @staticmethod
+    def binarize_factors(filename, dict, consumer, tokenize=get_factors, append_eos=True, reverse_order=False,
+                         offset=0, end=-1):
+        nseq, ntok = 0, 0
+
+        with open(filename, 'r', encoding='utf-8') as f:
+            f.seek(offset)
+            # next(f) breaks f.tell(), hence readline() must be used
+            line = safe_readline(f)
+            while line:
+                if end > 0 and f.tell() > end:
+                    break
+                ids = dict.encode_factors(
+                        line=line,
+                        line_tokenizer=tokenize,
+                        add_if_not_exist=False,
+                        consumer=None,
+                        append_eos=append_eos,
+                        reverse_order=reverse_order,
+                )
+                nseq += 1
+                ntok += len(ids)
+                consumer(ids)
+                line = f.readline()
+        return {'nseq': nseq, 'ntok': ntok}
 
     @staticmethod
     def binarize_alignments(filename, alignment_parser, consumer, offset=0, end=-1):

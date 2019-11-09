@@ -157,6 +157,65 @@ def main(args):
             )
         )
 
+    def make_binary_factors_dataset(vocab, input_prefix, output_prefix, lang, num_workers):
+        n_seq_tok = [0, 0]
+
+        def merge_result(worker_result):
+            n_seq_tok[0] += worker_result["nseq"]
+            n_seq_tok[1] += worker_result["ntok"]
+
+        input_file = "{}{}".format(
+            input_prefix, ("." + lang) if lang is not None else ""
+        )
+        offsets = Binarizer.find_offsets(input_file, num_workers)
+        pool = None
+        if num_workers > 1:
+            pool = Pool(processes=num_workers - 1)
+            for worker_id in range(1, num_workers):
+                prefix = "{}{}".format(output_prefix, worker_id)
+                pool.apply_async(
+                    binarize_factors,
+                    (
+                        args,
+                        input_file,
+                        vocab,
+                        prefix,
+                        lang,
+                        offsets[worker_id],
+                        offsets[worker_id + 1]
+                    ),
+                    callback=merge_result
+                )
+            pool.close()
+
+        ds = indexed_dataset.make_builder(dataset_dest_file(args, output_prefix, lang, "bin"),
+                                          impl=args.dataset_impl)
+        merge_result(
+            Binarizer.binarize_factors(
+                input_file, vocab, lambda t: ds.add_item(t),
+                offset=0, end=offsets[1]
+            )
+        )
+        if num_workers > 1:
+            pool.join()
+            for worker_id in range(1, num_workers):
+                prefix = "{}{}".format(output_prefix, worker_id)
+                temp_file_path = dataset_dest_prefix(args, prefix, lang)
+                ds.merge_file_(temp_file_path)
+                os.remove(indexed_dataset.data_file_path(temp_file_path))
+                os.remove(indexed_dataset.index_file_path(temp_file_path))
+
+        ds.finalize(dataset_dest_file(args, output_prefix, lang, "idx"))
+
+        print(
+            "| [{}] {}: {} sents, {} factors".format(
+                lang,
+                input_file,
+                n_seq_tok[0],
+                n_seq_tok[1],
+            )
+        )
+
     def make_binary_alignment_dataset(input_prefix, output_prefix, num_workers):
         nseq = [0]
 
@@ -234,6 +293,14 @@ def main(args):
                 outprefix = "test{}".format(k) if k > 0 else "test"
                 make_dataset(vocab, testpref, outprefix, lang, num_workers=args.workers)
 
+    def make_all_factors():
+        if args.trainpref:
+            make_binary_factors_dataset(src_dict, args.trainpref, "train.factor", args.source_lang, num_workers=args.workers)
+        if args.validpref:
+            make_binary_factors_dataset(src_dict, args.validpref, "valid.factor", args.source_lang, num_workers=args.workers)
+        if args.testpref:
+            make_binary_factors_dataset(src_dict, args.testpref, "test.factor", args.source_lang, num_workers=args.workers)
+
     def make_all_alignments():
         if args.trainpref and os.path.exists(args.trainpref + "." + args.align_suffix):
             make_binary_alignment_dataset(args.trainpref + "." + args.align_suffix, "train.align", num_workers=args.workers)
@@ -247,6 +314,8 @@ def main(args):
         make_all(args.target_lang, tgt_dict)
     if args.align_suffix:
         make_all_alignments()
+    if args.factored:
+        make_all_factors()
 
     print("| Wrote preprocessed data to {}".format(args.destdir))
 
@@ -302,6 +371,18 @@ def binarize(args, filename, vocab, output_prefix, lang, offset, end, append_eos
 
     res = Binarizer.binarize(filename, vocab, consumer, append_eos=append_eos,
                              offset=offset, end=end)
+    ds.finalize(dataset_dest_file(args, output_prefix, lang, "idx"))
+    return res
+
+def binarize_factors(args, filename, vocab, output_prefix, lang, offset, end, append_eos=True):
+    ds = indexed_dataset.make_builder(dataset_dest_file(args, output_prefix, lang, "bin"),
+                                      impl=args.dataset_impl, vocab_size=None)
+
+    def consumer(tensor):
+        ds.add_item(tensor)
+
+    res = Binarizer.binarize_factors(filename, vocab, consumer, append_eos=append_eos,
+                                     offset=offset, end=end)
     ds.finalize(dataset_dest_file(args, output_prefix, lang, "idx"))
     return res
 

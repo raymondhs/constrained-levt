@@ -22,6 +22,12 @@ def collate(
             pad_idx, eos_idx, left_pad, move_eos_to_beginning,
         )
 
+    def merge_factors(key, left_pad, move_eos_to_beginning=False):
+        return data_utils.collate_tokens(
+            [s[key] for s in samples],
+            0, 1, left_pad, move_eos_to_beginning,
+        )
+
     def check_alignment(alignment, src_len, tgt_len):
         if alignment is None or len(alignment) == 0:
             return False
@@ -51,6 +57,10 @@ def collate(
     src_lengths, sort_order = src_lengths.sort(descending=True)
     id = id.index_select(0, sort_order)
     src_tokens = src_tokens.index_select(0, sort_order)
+    src_factors = None
+    if samples[0].get('factor', None) is not None:
+        src_factors = merge_factors('factor', left_pad=left_pad_source)
+        src_factors = src_factors.index_select(0, sort_order)
 
     prev_output_tokens = None
     target = None
@@ -84,6 +94,9 @@ def collate(
     }
     if prev_output_tokens is not None:
         batch['net_input']['prev_output_tokens'] = prev_output_tokens
+
+    if src_factors is not None:
+        batch['net_input']['factor'] = src_factors
 
     if samples[0].get('alignment', None) is not None:
         bsz, tgt_sz = batch['target'].shape
@@ -151,7 +164,7 @@ class LanguagePairDataset(FairseqDataset):
         max_source_positions=1024, max_target_positions=1024,
         shuffle=True, input_feeding=True,
         remove_eos_from_source=False, append_eos_to_target=False,
-        align_dataset=None,
+        align_dataset=None, factor_dataset=None
     ):
         if tgt_dict is not None:
             assert src_dict.pad() == tgt_dict.pad()
@@ -174,6 +187,7 @@ class LanguagePairDataset(FairseqDataset):
         self.align_dataset = align_dataset
         if self.align_dataset is not None:
             assert self.tgt_sizes is not None, "Both source and target needed when alignments are provided"
+        self.factor_dataset = factor_dataset
 
     def __getitem__(self, index):
         tgt_item = self.tgt[index] if self.tgt is not None else None
@@ -199,6 +213,8 @@ class LanguagePairDataset(FairseqDataset):
         }
         if self.align_dataset is not None:
             example['alignment'] = self.align_dataset[index]
+        if self.factor_dataset is not None:
+            example['factor'] = self.factor_dataset[index]
         return example
 
     def __len__(self):

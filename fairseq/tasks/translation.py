@@ -25,6 +25,7 @@ def load_langpair_dataset(
     combine, dataset_impl, upsample_primary,
     left_pad_source, left_pad_target, max_source_positions,
     max_target_positions, prepend_bos=False, load_alignments=False,
+    load_factors=False,
 ):
     def split_exists(split, src, tgt, lang, data_path):
         filename = os.path.join(data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
@@ -80,6 +81,15 @@ def load_langpair_dataset(
         if indexed_dataset.dataset_exists(align_path, impl=dataset_impl):
             align_dataset = data_utils.load_indexed_dataset(align_path, None, dataset_impl)
 
+    factor_dataset = None
+    if load_factors:
+        factor_path = os.path.join(data_path, '{}.factor.{}-{}.'.format(split, src, tgt))
+        if indexed_dataset.dataset_exists(factor_path + src, impl=dataset_impl):
+            factor_dataset = data_utils.load_indexed_dataset(factor_path + src, None, dataset_impl)
+            print('| loaded {} factors from: {}'.format(len(factor_dataset), factor_path + src))
+            if prepend_bos:
+                factor_dataset = PrependTokenDataset(factor_dataset, 1)
+
     return LanguagePairDataset(
         src_dataset, src_dataset.sizes, src_dict,
         tgt_dataset, tgt_dataset.sizes, tgt_dict,
@@ -88,6 +98,7 @@ def load_langpair_dataset(
         max_source_positions=max_source_positions,
         max_target_positions=max_target_positions,
         align_dataset=align_dataset,
+        factor_dataset=factor_dataset,
     )
 
 
@@ -139,6 +150,8 @@ class TranslationTask(FairseqTask):
                             help='max number of tokens in the target sequence')
         parser.add_argument('--upsample-primary', default=1, type=int,
                             help='amount to upsample primary dataset')
+        parser.add_argument('--load-factors', action='store_true',
+                            help='load the binarized factors')
         # fmt: on
 
     def __init__(self, args, src_dict, tgt_dict):
@@ -203,6 +216,7 @@ class TranslationTask(FairseqTask):
             max_source_positions=self.args.max_source_positions,
             max_target_positions=self.args.max_target_positions,
             load_alignments=self.args.load_alignments,
+            load_factors=self.args.load_factors,
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):
