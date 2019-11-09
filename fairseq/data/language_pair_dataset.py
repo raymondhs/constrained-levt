@@ -58,8 +58,8 @@ def collate(
     id = id.index_select(0, sort_order)
     src_tokens = src_tokens.index_select(0, sort_order)
     src_factors = None
-    if samples[0].get('factor', None) is not None:
-        src_factors = merge_factors('factor', left_pad=left_pad_source)
+    if samples[0].get('source_factor', None) is not None:
+        src_factors = merge_factors('source_factor', left_pad=left_pad_source)
         src_factors = src_factors.index_select(0, sort_order)
 
     prev_output_tokens = None
@@ -96,7 +96,7 @@ def collate(
         batch['net_input']['prev_output_tokens'] = prev_output_tokens
 
     if src_factors is not None:
-        batch['net_input']['factor'] = src_factors
+        batch['net_input']['src_factors'] = src_factors
 
     if samples[0].get('alignment', None) is not None:
         bsz, tgt_sz = batch['target'].shape
@@ -214,7 +214,7 @@ class LanguagePairDataset(FairseqDataset):
         if self.align_dataset is not None:
             example['alignment'] = self.align_dataset[index]
         if self.factor_dataset is not None:
-            example['factor'] = self.factor_dataset[index]
+            example['source_factor'] = self.factor_dataset[index]
         return example
 
     def __len__(self):

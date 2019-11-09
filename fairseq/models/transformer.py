@@ -308,7 +308,7 @@ class TransformerEncoder(FairseqEncoder):
         x = F.dropout(x, p=self.dropout, training=self.training)
         return x, embed
 
-    def forward(self, src_tokens, src_lengths, cls_input=None, return_all_hiddens=False, factor=None):
+    def forward(self, src_tokens, src_lengths, cls_input=None, return_all_hiddens=False, src_factors=None):
         """
         Args:
             src_tokens (LongTensor): tokens in the source language of shape
