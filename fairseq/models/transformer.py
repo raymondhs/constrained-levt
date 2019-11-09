@@ -29,6 +29,7 @@ from fairseq.modules import (
 DEFAULT_MAX_SOURCE_POSITIONS = 1024
 DEFAULT_MAX_TARGET_POSITIONS = 1024
 
+DEFAULT_MAX_SOURCE_FACTORS = 128
 
 @register_model('transformer')
 class TransformerModel(FairseqEncoderDecoderModel):
@@ -87,6 +88,8 @@ class TransformerModel(FairseqEncoderDecoderModel):
                             help='path to pre-trained encoder embedding')
         parser.add_argument('--encoder-embed-dim', type=int, metavar='N',
                             help='encoder embedding dimension')
+        parser.add_argument('--encoder-factor-embed-dim', type=int, metavar='N',
+                            help='encoder factor embedding dimension')
         parser.add_argument('--encoder-ffn-embed-dim', type=int, metavar='N',
                             help='encoder embedding dimension for FFN')
         parser.add_argument('--encoder-layers', type=int, metavar='N',
@@ -143,6 +146,8 @@ class TransformerModel(FairseqEncoderDecoderModel):
             args.max_source_positions = DEFAULT_MAX_SOURCE_POSITIONS
         if not hasattr(args, 'max_target_positions'):
             args.max_target_positions = DEFAULT_MAX_TARGET_POSITIONS
+        if not hasattr(args, 'max_source_factors'):
+            args.max_source_factors = DEFAULT_MAX_SOURCE_FACTORS
 
         src_dict, tgt_dict = task.source_dictionary, task.target_dictionary
 
@@ -287,6 +292,15 @@ class TransformerEncoder(FairseqEncoder):
             learned=args.encoder_learned_pos,
         ) if not args.no_token_positional_embeddings else None
 
+        #embedding for source factors
+        self.embed_factors = Embedding(
+            args.max_source_factors, args.encoder_factor_embed_dim, padding_idx=0,
+        ) if args.load_factors else None
+
+        # update embedding dimension
+        embed_dim = embed_dim + args.encoder_factor_embed_dim if args.load_factors else embed_dim
+        args.encoder_embed_dim = embed_dim
+
         self.layer_wise_attention = getattr(args, 'layer_wise_attention', False)
 
         self.layers = nn.ModuleList([])
@@ -300,11 +314,13 @@ class TransformerEncoder(FairseqEncoder):
         else:
             self.layer_norm = None
 
-    def forward_embedding(self, src_tokens):
+    def forward_embedding(self, src_tokens, src_factors=None):
         # embed tokens and positions
         embed = self.embed_scale * self.embed_tokens(src_tokens)
         if self.embed_positions is not None:
             x = embed + self.embed_positions(src_tokens)
+        if self.embed_factors is not None:
+            x = torch.cat((x, self.embed_factors(src_factors)), -1)
         x = F.dropout(x, p=self.dropout, training=self.training)
         return x, embed
 
@@ -317,6 +333,8 @@ class TransformerEncoder(FairseqEncoder):
                 shape `(batch)`
             return_all_hiddens (bool, optional): also return all of the
                 intermediate hidden states (default: False).
+            src_factors (LongTensor): source token factors of the shape
+                `(batch, src_len)`
 
         Returns:
             dict:
@@ -331,7 +349,7 @@ class TransformerEncoder(FairseqEncoder):
         if self.layer_wise_attention:
             return_all_hiddens = True
 
-        x, encoder_embedding = self.forward_embedding(src_tokens)
+        x, encoder_embedding = self.forward_embedding(src_tokens, src_factors)
 
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
@@ -706,6 +724,7 @@ def Linear(in_features, out_features, bias=True):
 def base_architecture(args):
     args.encoder_embed_path = getattr(args, 'encoder_embed_path', None)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
+    args.encoder_factor_embed_dim = getattr(args, 'encoder_factor_embed_dim', 16)
     args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 2048)
     args.encoder_layers = getattr(args, 'encoder_layers', 6)
     args.encoder_attention_heads = getattr(args, 'encoder_attention_heads', 8)

@@ -152,6 +152,8 @@ class TranslationTask(FairseqTask):
                             help='amount to upsample primary dataset')
         parser.add_argument('--load-factors', action='store_true',
                             help='load the binarized factors')
+        parser.add_argument('--max-source-factors', default=128, type=int, metavar='N',
+                            help='max number of factors in the source')
         # fmt: on
 
     def __init__(self, args, src_dict, tgt_dict):
