@@ -144,7 +144,6 @@ def _get_del_ins_targets(in_tokens, out_tokens, padding_idx):
 def _apply_ins_masks(
     in_tokens, in_scores, mask_ins_pred, padding_idx, unk_idx, eos_idx, in_constraint=None
 ):
-
     in_masks = in_tokens.ne(padding_idx)
     in_lengths = in_masks.sum(1)
 
@@ -379,7 +378,7 @@ class LevenshteinTransformerModel(TransformerModel):
             word_del_score = F.log_softmax(word_del_out, 2)
             word_del_pred = word_del_score.max(-1)[1].bool()
 
-            _tokens, _scores, _attn, constraint = _apply_del_words(
+            _tokens, _scores, _attn, _constraint = _apply_del_words(
                 output_tokens[can_del_word],
                 output_scores[can_del_word],
                 word_del_attn,
@@ -387,11 +386,12 @@ class LevenshteinTransformerModel(TransformerModel):
                 self.pad,
                 self.bos,
                 self.eos,
-                constraint,
+                constraint[can_del_word] if constraint is not None else None,
             )
             output_tokens = _fill(output_tokens, can_del_word, _tokens, self.pad)
             output_scores = _fill(output_scores, can_del_word, _scores, 0)
             attn = _fill(attn, can_del_word, _attn, 0.)
+            constraint = _fill(constraint, can_del_word, _constraint, 0)
 
         # insert placeholders
         can_ins_mask = output_tokens.ne(self.pad).sum(1) < max_lens
@@ -407,17 +407,18 @@ class LevenshteinTransformerModel(TransformerModel):
                 mask_ins_pred, max_lens[can_ins_mask, None].expand_as(mask_ins_pred)
             )
 
-            _tokens, _scores, constraint = _apply_ins_masks(
+            _tokens, _scores, _constraint = _apply_ins_masks(
                 output_tokens[can_ins_mask],
                 output_scores[can_ins_mask],
                 mask_ins_pred,
                 self.pad,
                 self.unk,
                 self.eos,
-                constraint
+                constraint[can_ins_mask] if constraint is not None else None,
             )
             output_tokens = _fill(output_tokens, can_ins_mask, _tokens, self.pad)
             output_scores = _fill(output_scores, can_ins_mask, _scores, 0)
+            constraint = _fill(constraint, can_ins_mask, _constraint, 0)
 
         # insert words
         can_ins_word = output_tokens.eq(self.unk).sum(1) > 0
