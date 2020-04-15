@@ -514,9 +514,9 @@ def add_generation_args(parser):
 
     # constraint decoding
     group.add_argument(
-            "--no-delete-constraint",
+            "--preserve-constraint",
             action='store_true',
-            help='disallow constrained token deletion'
+            help='preserve constrained tokens in the output'
     )
 
     # fmt: on

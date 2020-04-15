@@ -17,7 +17,7 @@ from fairseq.data import data_utils, encoders
 from fairseq.meters import StopwatchMeter
 
 
-Batch = namedtuple('Batch', 'ids src_tokens src_lengths tgt_init_tokens')
+Batch = namedtuple('Batch', 'ids src_tokens src_lengths tgt_init_tokens tgt_init_lengths')
 Translation = namedtuple('Translation', 'src_str hypos pos_scores alignments')
 
 
@@ -42,11 +42,16 @@ def make_batches(lines, args, task, max_positions, encode_fn, init_outputs_list=
         for src_str in lines
     ]
     init_outputs = []
+    init_lengths = []
     for init_output_strs in init_outputs_list:
         line_init_outputs = " ".join(init_output_strs)
+        line_init_lengths = torch.LongTensor(
+            [len(s.split()) for s in init_output_strs]
+        )
         init_outputs.append(task.target_dictionary.encode_line(
                                 encode_fn(line_init_outputs), add_if_not_exist=False, append_bos=True
                            ).long())
+        init_lengths.append(line_init_lengths)
     lengths = torch.LongTensor([t.numel() for t in tokens])
     itr = task.get_batch_iterator(
         dataset=task.build_dataset_for_inference(tokens, lengths),
@@ -61,6 +66,9 @@ def make_batches(lines, args, task, max_positions, encode_fn, init_outputs_list=
             tgt_init_tokens=data_utils.collate_tokens(
                 [init_outputs[idx] for idx in batch['id']],
                 task.target_dictionary.pad(), task.target_dictionary.eos()
+            ),
+            tgt_init_lengths=data_utils.collate_tokens(
+                [init_lengths[idx] for idx in batch['id']], 0
             )
         )
 
@@ -158,16 +166,19 @@ def main(args):
             src_tokens = batch.src_tokens
             src_lengths = batch.src_lengths
             tgt_init_tokens = batch.tgt_init_tokens
+            tgt_init_lengths = batch.tgt_init_lengths
             if use_cuda:
                 src_tokens = src_tokens.cuda()
                 src_lengths = src_lengths.cuda()
                 tgt_init_tokens = tgt_init_tokens.cuda()
+                tgt_init_lengths = tgt_init_lengths.cuda()
 
             sample = {
                 'net_input': {
                     'src_tokens': src_tokens,
                     'src_lengths': src_lengths,
                     'tgt_init_tokens': tgt_init_tokens,
+                    'tgt_init_lengths': tgt_init_lengths,
                 },
             }
             gen_timer.start()

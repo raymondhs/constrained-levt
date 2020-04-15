@@ -20,7 +20,7 @@ class IterativeRefinementGenerator(object):
                  decoding_format=None,
                  retain_dropout=False,
                  adaptive=True,
-                 no_delete_constraint=False):
+                 preserve_constraint=False):
         """
         Generates translations based on iterative refinement.
 
@@ -44,7 +44,7 @@ class IterativeRefinementGenerator(object):
         self.decoding_format = decoding_format
         self.retain_dropout = retain_dropout
         self.adaptive = adaptive
-        self.no_delete_constraint = no_delete_constraint
+        self.preserve_constraint = preserve_constraint
 
     @torch.no_grad()
     def generate(self, models, sample, prefix_tokens=None):
@@ -64,8 +64,10 @@ class IterativeRefinementGenerator(object):
         src_tokens = sample['net_input']['src_tokens']
         src_lengths = sample['net_input']['src_lengths']
         tgt_init_tokens = None
+        tgt_init_lengths = None
         if 'tgt_init_tokens' in sample['net_input']:
             tgt_init_tokens = sample['net_input']['tgt_init_tokens']
+            tgt_init_lengths = sample['net_input']['tgt_init_lengths']
         bsz, src_len = src_tokens.size()
         sent_idxs = torch.arange(bsz, device=src_tokens.device)
 
@@ -74,12 +76,12 @@ class IterativeRefinementGenerator(object):
 
         # initialize buffers (very model specific, with length prediction or not)
         prev_decoder_out = model.initialize_output_tokens(
-            encoder_out, src_tokens, tgt_init_tokens)
+            encoder_out, src_tokens, tgt_init_tokens, tgt_init_lengths)
         prev_out_tokens = prev_decoder_out['output_tokens'].clone()
 
         finalized = [[] for _ in range(bsz)]
 
-        def is_a_loop(x, y, s, a, c):
+        def is_a_loop(x, y, s, a, c, d):
             b, l_x, l_y = x.size(0), x.size(1), y.size(1)
             if l_x > l_y:
                 y = torch.cat([y, x.new_zeros(b, l_x - l_y).fill_(self.pad)], 1)
@@ -88,17 +90,22 @@ class IterativeRefinementGenerator(object):
                     a = torch.cat([a, a.new_zeros(b, l_x - l_y, a.size(2))], 1)
                 if c is not None:
                     c = torch.cat([c, c.new_zeros(b, l_x - l_y)], 1)
+                if d is not None:
+                    d = torch.cat([d, d.new_zeros(b, l_x - l_y)], 1)
             elif l_x < l_y:
                 x = torch.cat([x, y.new_zeros(b, l_y - l_x).fill_(self.pad)], 1)
-            return (x == y).all(1), y, s, a, c
+            return (x == y).all(1), y, s, a, c, d
 
-        def finalized_hypos(step, prev_out_token, prev_out_score, prev_out_attn, prev_out_constraint, src_tokens):
+        def finalized_hypos(step, prev_out_token, prev_out_score, prev_out_attn, prev_out_const_del, prev_out_const_ins, src_tokens):
             cutoff = prev_out_token.ne(self.pad)
             tokens = prev_out_token[cutoff]
             scores = prev_out_score[cutoff]
-            constraints = None
-            if prev_out_constraint is not None:
-                constraints = prev_out_constraint[cutoff]
+            const_del = None
+            if prev_out_const_del is not None:
+                const_del = prev_out_const_del[cutoff]
+            const_ins = None
+            if prev_out_const_ins is not None:
+                const_ins = prev_out_const_ins[cutoff]
             if prev_out_attn is None:
                 hypo_attn, alignment = None, None
             else:
@@ -111,7 +118,8 @@ class IterativeRefinementGenerator(object):
                 'score': scores.mean(),
                 'hypo_attn': hypo_attn,
                 'alignment': alignment,
-                'constraint': constraints
+                'const_del': const_del,
+                'const_ins': const_ins,
             }
 
         for step in range(self.max_iter + 1):
@@ -120,7 +128,7 @@ class IterativeRefinementGenerator(object):
                 'eos_penalty': self.eos_penalty,
                 'max_ratio': self.max_ratio,
                 'decoding_format': self.decoding_format,
-                'no_delete_constraint': self.no_delete_constraint,
+                'preserve_constraint': self.preserve_constraint,
             }
             prev_decoder_out['step'] = step
             prev_decoder_out['max_step'] = self.max_iter + 1
@@ -131,14 +139,15 @@ class IterativeRefinementGenerator(object):
 
             if self.adaptive:
                 # terminate if there is a loop
-                terminated, out_tokens, out_scores, out_attn, out_constraint = is_a_loop(
+                terminated, out_tokens, out_scores, out_attn, out_const_del, out_const_ins = is_a_loop(
                     prev_out_tokens, decoder_out['output_tokens'],
                     decoder_out['output_scores'], decoder_out['attn'],
-                    decoder_out['constraint'])
+                    decoder_out['const_del'], decoder_out['const_ins'])
                 decoder_out['output_tokens'] = out_tokens
                 decoder_out['output_scores'] = out_scores
                 decoder_out['attn'] = out_attn
-                decoder_out['constraint'] = out_constraint
+                decoder_out['const_del'] = out_const_del
+                decoder_out['const_ins'] = out_const_ins
 
             else:
                 terminated = decoder_out['output_tokens'].new_zeros(
@@ -152,7 +161,8 @@ class IterativeRefinementGenerator(object):
             finalized_tokens = decoder_out['output_tokens'][terminated]
             finalized_scores = decoder_out['output_scores'][terminated]
             finalized_attn = None if decoder_out['attn'] is None else decoder_out['attn'][terminated]
-            finalized_constraint = None if decoder_out['constraint'] is None else decoder_out['constraint'][terminated]
+            finalized_const_del = None if decoder_out['const_del'] is None else decoder_out['const_del'][terminated]
+            finalized_const_ins = None if decoder_out['const_ins'] is None else decoder_out['const_ins'][terminated]
 
             for i in range(finalized_idxs.size(0)):
                 finalized[finalized_idxs[i]] = [
@@ -161,7 +171,8 @@ class IterativeRefinementGenerator(object):
                         finalized_tokens[i],
                         finalized_scores[i],
                         None if finalized_attn is None else finalized_attn[i],
-                        None if finalized_constraint is None else finalized_constraint[i],
+                        None if finalized_const_del is None else finalized_const_del[i],
+                        None if finalized_const_ins is None else finalized_const_ins[i],
                         src_tokens[finalized_idxs[i]]
                     )
                 ]

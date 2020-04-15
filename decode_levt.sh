@@ -97,18 +97,18 @@ elif [ $method = "levt+const" ]; then
     # add suffix .const for constrained input
     call_levt_const $tst.const $int
 elif [ $method = "levt+const+nodel" ]; then
-    call_levt_const $tst.const $int --no-delete-constraint
+    call_levt_const $tst.const $int --preserve-constraint
 elif [ $method = "levt+const+nodel+oracle" ]; then
     # TODO: modify later if needed
     python reorder_constraints_oracle.py \
         -i $tst.const -r $ref \
         --remove-bpe > $out/oracle
-    call_levt_const $out/oracle $int --no-delete-constraint
+    call_levt_const $out/oracle $int --preserve-constraint
 elif [ $method = "levt+const+nodel+reorder" ]; then
     # TODO: modify later if needed
     call_levt $tst $int.1 --print-alignment
     python reorderer.py -i $tst.const -a $int.1 > $out/reordered
-    call_levt_const $out/reordered $int --no-delete-constraint
+    call_levt_const $out/reordered $int --preserve-constraint
 else
     echo "unsupported method $method"
     rm -r $out

@@ -142,7 +142,8 @@ def _get_del_ins_targets(in_tokens, out_tokens, padding_idx):
 
 
 def _apply_ins_masks(
-    in_tokens, in_scores, mask_ins_pred, padding_idx, unk_idx, eos_idx, in_constraint=None
+    in_tokens, in_scores, mask_ins_pred, padding_idx, unk_idx, eos_idx,
+    in_const_del=None, in_const_ins=None
 ):
     in_masks = in_tokens.ne(padding_idx)
     in_lengths = in_masks.sum(1)
@@ -150,6 +151,8 @@ def _apply_ins_masks(
     # HACK: hacky way to shift all the paddings to eos first.
     in_tokens.masked_fill_(~in_masks, eos_idx)
     mask_ins_pred.masked_fill_(~in_masks[:, 1:], 0)
+    if in_const_ins is not None:
+        mask_ins_pred.masked_fill_(~in_const_ins[:, :-1], 0)
 
     out_lengths = in_lengths + mask_ins_pred.sum(1)
     out_max_len = out_lengths.max()
@@ -175,13 +178,20 @@ def _apply_ins_masks(
         out_scores.scatter_(1, reordering, in_scores[:, 1:])
 
     # update constraint mask
-    out_constraint = None
-    if in_constraint is not None:
-        out_constraint = in_constraint.new_zeros(*out_tokens.size())
-        out_constraint[:, 0] = in_constraint[:, 0]
-        out_constraint.scatter_(1, reordering, in_constraint[:, 1:])
+    out_const_del = None
+    if in_const_del is not None:
+        out_const_del = in_const_del.new_zeros(*out_tokens.size())
+        out_const_del[:, 0] = in_const_del[:, 0]
+        out_const_del.scatter_(1, reordering, in_const_del[:, 1:])
 
-    return out_tokens, out_scores, out_constraint
+    out_const_ins = None
+    if in_const_ins is not None:
+        # default value is 1 to allow insertion outside constraint tokens
+        out_const_ins = in_const_ins.new_ones(*out_tokens.size())
+        out_const_ins[:, 0] = in_const_ins[:, 0]
+        out_const_ins.scatter_(1, reordering, in_const_ins[:, 1:])
+
+    return out_tokens, out_scores, out_const_del, out_const_ins
 
 
 def _apply_ins_words(in_tokens, in_scores, word_ins_pred, word_ins_scores, unk_idx):
@@ -199,18 +209,19 @@ def _apply_ins_words(in_tokens, in_scores, word_ins_pred, word_ins_scores, unk_i
 
 
 def _apply_del_words(
-    in_tokens, in_scores, in_attn, word_del_pred, padding_idx, bos_idx, eos_idx, in_constraint=None
+    in_tokens, in_scores, in_attn, word_del_pred, padding_idx, bos_idx, eos_idx,
+    in_const_del=None, in_const_ins=None,
 ):
     # apply deletion to a tensor
     in_masks = in_tokens.ne(padding_idx)
-    if in_constraint is None:
-        bos_eos_masks = in_tokens.eq(bos_idx) | in_tokens.eq(eos_idx)
-    else:
-        bos_eos_masks = in_constraint
 
     max_len = in_tokens.size(1)
     word_del_pred.masked_fill_(~in_masks, 1)
-    word_del_pred.masked_fill_(bos_eos_masks, 0)
+    if in_const_del is None:
+        bos_eos_masks = in_tokens.eq(bos_idx) | in_tokens.eq(eos_idx)
+        word_del_pred.masked_fill_(bos_eos_masks, 0)
+    else:
+        word_del_pred.masked_fill_(in_const_del, 0)
 
     reordering = (
         new_arange(in_tokens)
@@ -231,11 +242,15 @@ def _apply_del_words(
         out_attn = in_attn.masked_fill(_mask, 0.).gather(1, _reordering)
 
     # update constraint mask
-    out_constraint = None
-    if in_constraint is not None:
-        out_constraint = in_constraint.gather(1, reordering)
+    out_const_del = None
+    if in_const_del is not None:
+        out_const_del = in_const_del.gather(1, reordering)
 
-    return out_tokens, out_scores, out_attn, out_constraint
+    out_const_ins = None
+    if in_const_ins is not None:
+        out_const_ins = in_const_ins.gather(1, reordering)
+
+    return out_tokens, out_scores, out_attn, out_const_del, out_const_ins
 
 
 @register_model("levenshtein_transformer")
@@ -348,13 +363,16 @@ class LevenshteinTransformerModel(TransformerModel):
         return self.encoder(*encoder_inputs)
 
     def forward_decoder(
-        self, decoder_out, encoder_out, eos_penalty=0.0, max_ratio=None, no_delete_constraint=False, **kwargs
-    ):
-
+        self, decoder_out, encoder_out, eos_penalty=0.0, max_ratio=None, preserve_constraint=False, **kwargs):
         output_tokens = decoder_out["output_tokens"]
         output_scores = decoder_out["output_scores"]
         attn = decoder_out["attn"]
-        constraint = decoder_out["constraint"] if no_delete_constraint else None
+        if preserve_constraint:
+            const_del = decoder_out["const_del"]
+            const_ins = decoder_out["const_ins"]
+        else:
+            const_del = None
+            const_ins = None
 
         bsz = output_tokens.size(0)
         if max_ratio is None:
@@ -369,7 +387,7 @@ class LevenshteinTransformerModel(TransformerModel):
 
         # delete words
         # do not delete tokens if it is <s> </s> or constraint tokens
-        num_cannot_del = constraint.sum(1) if constraint is not None else 2
+        num_cannot_del = const_del.sum(1) if const_del is not None else 2
         can_del_word = output_tokens.ne(self.pad).sum(1) > num_cannot_del
         if can_del_word.sum() != 0:  # we cannot delete, skip
             word_del_out, word_del_attn = self.decoder.forward_word_del(
@@ -378,7 +396,7 @@ class LevenshteinTransformerModel(TransformerModel):
             word_del_score = F.log_softmax(word_del_out, 2)
             word_del_pred = word_del_score.max(-1)[1].bool()
 
-            _tokens, _scores, _attn, _constraint = _apply_del_words(
+            _tokens, _scores, _attn, _const_del, _const_ins = _apply_del_words(
                 output_tokens[can_del_word],
                 output_scores[can_del_word],
                 word_del_attn,
@@ -386,12 +404,14 @@ class LevenshteinTransformerModel(TransformerModel):
                 self.pad,
                 self.bos,
                 self.eos,
-                constraint[can_del_word] if constraint is not None else None,
+                const_del[can_del_word] if const_del is not None else None,
+                const_ins[can_del_word] if const_ins is not None else None,
             )
             output_tokens = _fill(output_tokens, can_del_word, _tokens, self.pad)
             output_scores = _fill(output_scores, can_del_word, _scores, 0)
             attn = _fill(attn, can_del_word, _attn, 0.)
-            constraint = _fill(constraint, can_del_word, _constraint, 0)
+            const_del = _fill(const_del, can_del_word, _const_del, 0)
+            const_ins = _fill(const_ins, can_del_word, _const_ins, 0)
 
         # insert placeholders
         can_ins_mask = output_tokens.ne(self.pad).sum(1) < max_lens
@@ -407,18 +427,20 @@ class LevenshteinTransformerModel(TransformerModel):
                 mask_ins_pred, max_lens[can_ins_mask, None].expand_as(mask_ins_pred)
             )
 
-            _tokens, _scores, _constraint = _apply_ins_masks(
+            _tokens, _scores, _const_del, _const_ins = _apply_ins_masks(
                 output_tokens[can_ins_mask],
                 output_scores[can_ins_mask],
                 mask_ins_pred,
                 self.pad,
                 self.unk,
                 self.eos,
-                constraint[can_ins_mask] if constraint is not None else None,
+                const_del[can_ins_mask] if const_del is not None else None,
+                const_ins[can_ins_mask] if const_ins is not None else None,
             )
             output_tokens = _fill(output_tokens, can_ins_mask, _tokens, self.pad)
             output_scores = _fill(output_scores, can_ins_mask, _scores, 0)
-            constraint = _fill(constraint, can_ins_mask, _constraint, 0)
+            const_del = _fill(const_del, can_ins_mask, _const_del, 0)
+            const_ins = _fill(const_ins, can_ins_mask, _const_ins, 0)
 
         # insert words
         can_ins_word = output_tokens.eq(self.unk).sum(1) > 0
@@ -445,16 +467,18 @@ class LevenshteinTransformerModel(TransformerModel):
         cut_off = output_tokens.ne(self.pad).sum(1).max()
         output_tokens = output_tokens[:, :cut_off]
         output_scores = output_scores[:, :cut_off]
-        constraint = None if constraint is None else constraint[:, :cut_off]
+        const_del = None if const_del is None else const_del[:, :cut_off]
+        const_ins = None if const_ins is None else const_ins[:, :cut_off]
         attn = None if attn is None else attn[:, :cut_off, :]
         return {
             "output_tokens": output_tokens,
             "output_scores": output_scores,
             "attn": attn,
-            "constraint": constraint,
+            "const_del": const_del,
+            "const_ins": const_ins,
         }
 
-    def initialize_output_tokens(self, encoder_out, src_tokens, pre_output_tokens=None):
+    def initialize_output_tokens(self, encoder_out, src_tokens, pre_output_tokens=None, constraint_lengths=None):
         if pre_output_tokens is None:
             initial_output_tokens = src_tokens.new_zeros(src_tokens.size(0), 2)
             initial_output_tokens[:, 0] = self.bos
@@ -471,12 +495,22 @@ class LevenshteinTransformerModel(TransformerModel):
             initial_attn = initial_output_tokens.new_zeros(
                 src_tokens.size(0), initial_output_tokens.size(1), src_tokens.size(1)
             )
-        initial_constraint = initial_output_tokens.ne(self.pad)
+        initial_const_del = initial_output_tokens.ne(self.pad)
+        initial_const_ins = None
+        if constraint_lengths is not None:
+            initial_const_ins = initial_output_tokens.new_zeros(
+                *initial_output_tokens.size()
+            ).bool()
+            initial_const_ins[:, 0] = 1
+            can_ins_pos = constraint_lengths.cumsum(1)
+            initial_const_ins.scatter_(1, can_ins_pos, 1)
+            
         return {
             "output_tokens": initial_output_tokens,
             "output_scores": initial_output_scores,
             "attn": initial_attn,
-            "constraint": initial_constraint
+            "const_del": initial_const_del,
+            "const_ins": initial_const_ins,
         }
 
 
