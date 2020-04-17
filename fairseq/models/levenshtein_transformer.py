@@ -363,16 +363,17 @@ class LevenshteinTransformerModel(TransformerModel):
         return self.encoder(*encoder_inputs)
 
     def forward_decoder(
-        self, decoder_out, encoder_out, eos_penalty=0.0, max_ratio=None, preserve_constraint=False, **kwargs):
+        self, decoder_out, encoder_out, eos_penalty=0.0, max_ratio=None,
+        preserve_constraint=False, allow_insertion_constraint=False, **kwargs):
         output_tokens = decoder_out["output_tokens"]
         output_scores = decoder_out["output_scores"]
         attn = decoder_out["attn"]
+        const_del = None
+        const_ins = None
         if preserve_constraint:
             const_del = decoder_out["const_del"]
-            const_ins = decoder_out["const_ins"]
-        else:
-            const_del = None
-            const_ins = None
+            if not allow_insertion_constraint:
+                const_ins = decoder_out["const_ins"]
 
         bsz = output_tokens.size(0)
         if max_ratio is None:

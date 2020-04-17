@@ -513,11 +513,12 @@ def add_generation_args(parser):
     group.add_argument('--decoding-format', default=None, type=str, choices=['unigram', 'ensemble', 'vote', 'dp', 'bs'])
 
     # constraint decoding
-    group.add_argument(
-            "--preserve-constraint",
-            action='store_true',
-            help='preserve constrained tokens in the output'
-    )
+    group.add_argument("--preserve-constraint",
+                       action='store_true',
+                       help='preserve constrained tokens in the output')
+    group.add_argument("--allow-insertion-constraint",
+                       action='store_true',
+                       help='allow insertion between constrained tokens')
 
     # fmt: on
     return group

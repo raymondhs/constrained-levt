@@ -1,6 +1,15 @@
 # Constrained-LevT
 
-This repository contains the code for the ACL-20 paper: Lexically Constrained Neural Machine Translation with Levenshtein Transformer.
+This repository contains the code for the ACL-20 paper: Lexically Constrained Neural Machine Translation with Levenshtein Transformer. If you use this repository in your work, please cite:
+
+```bibtex
+@article{susanto2020lexically,
+  title={Lexically Constrained Neural Machine Translation with Levenshtein Transformer},
+  author={Susanto, Raymond Hendy and Chollampatt, Shamil and Tan, Li Ling},
+  journal={arXiv preprint arXiv:1234.56789},
+  year={2020}
+}
+```
 
 ## Requirements and Installation
 
@@ -51,14 +60,3 @@ python scripts/term_usage_rate.py \
 ## License
 
 [Creative Commons Attribution-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-sa/4.0/)
-
-## Citation
-
-```bibtex
-@article{susanto2020lexically,
-  title={Lexically Constrained Neural Machine Translation with Levenshtein Transformer},
-  author={Susanto, Raymond Hendy and Chollampatt, Shamil and Tan, Li Ling},
-  journal={arXiv preprint arXiv:1234.56789},
-  year={2020}
-}
-```

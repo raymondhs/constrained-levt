@@ -20,7 +20,8 @@ class IterativeRefinementGenerator(object):
                  decoding_format=None,
                  retain_dropout=False,
                  adaptive=True,
-                 preserve_constraint=False):
+                 preserve_constraint=False,
+                 allow_insertion_constraint=False):
         """
         Generates translations based on iterative refinement.
 
@@ -32,6 +33,8 @@ class IterativeRefinementGenerator(object):
             decoding_format: decoding mode in {'unigram', 'ensemble', 'vote', 'dp', 'bs'}
             retain_dropout: retaining dropout in the inference
             adaptive: decoding with early stop
+            preserve_constraint: preserve constrained tokens in the output
+            allow_insertion_constraint: allow insertion between constrained tokens
         """
         self.bos = tgt_dict.bos()
         self.pad = tgt_dict.pad()
@@ -45,6 +48,7 @@ class IterativeRefinementGenerator(object):
         self.retain_dropout = retain_dropout
         self.adaptive = adaptive
         self.preserve_constraint = preserve_constraint
+        self.allow_insertion_constraint = allow_insertion_constraint
 
     @torch.no_grad()
     def generate(self, models, sample, prefix_tokens=None):
@@ -129,6 +133,7 @@ class IterativeRefinementGenerator(object):
                 'max_ratio': self.max_ratio,
                 'decoding_format': self.decoding_format,
                 'preserve_constraint': self.preserve_constraint,
+                'allow_insertion_constraint': self.allow_insertion_constraint,
             }
             prev_decoder_out['step'] = step
             prev_decoder_out['max_step'] = self.max_iter + 1
