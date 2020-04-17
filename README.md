@@ -57,6 +57,12 @@ python scripts/term_usage_rate.py \
 # Term use rate: 100.000
 ```
 
+A preprocessing script (`tokenize.sh`) is provided in case you want to try with your own input. It will run tokenization, BPE segmentation, and additional preprocessing for Romanian. For example:
+
+```bash
+echo 'Hello world!" | ./tokenize.sh en data-bin/const_levt_en_de/ende.code
+```
+
 ## License
 
 [Creative Commons Attribution-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-sa/4.0/)
