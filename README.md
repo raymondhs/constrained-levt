@@ -5,8 +5,8 @@ This repository contains the code for the ACL-20 paper: Lexically Constrained Ne
 ```bibtex
 @article{susanto2020lexically,
   title={Lexically Constrained Neural Machine Translation with Levenshtein Transformer},
-  author={Susanto, Raymond Hendy and Chollampatt, Shamil and Tan, Li Ling},
-  journal={arXiv preprint arXiv:1234.56789},
+  author={Susanto, Raymond Hendy and Chollampatt, Shamil and Tan, Liling},
+  journal={arXiv preprint arXiv:2004.12681},
   year={2020}
 }
 ```
@@ -60,7 +60,7 @@ python scripts/term_usage_rate.py \
 A preprocessing script (`tokenize.sh`) is provided in case you want to try with your own input. It will run tokenization, BPE segmentation, and additional preprocessing for Romanian. For example:
 
 ```bash
-echo 'Hello world!" | ./tokenize.sh en data-bin/const_levt_en_de/ende.code
+echo 'Hello world!' | ./tokenize.sh en data-bin/const_levt_en_de/ende.code
 ```
 
 ## License
