@@ -65,4 +65,4 @@ echo 'Hello world!" | ./tokenize.sh en data-bin/const_levt_en_de/ende.code
 
 ## License
 
-[Creative Commons Attribution-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-sa/4.0/)
+The code and models in this repository are licensed under the MIT License. The evaluation datasets are licensed under [CC-BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
