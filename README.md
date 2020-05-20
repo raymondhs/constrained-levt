@@ -57,7 +57,7 @@ python scripts/term_usage_rate.py \
 # Term use rate: 100.000
 ```
 
-A preprocessing script (`tokenize.sh`) is provided in case you want to try with your own input. It will run tokenization, BPE segmentation, and additional preprocessing for Romanian. For example:
+Each input line is tab-separated, where the first column corresponds to the source text and the remaining columns for the constraints. Each constraint is provided in this format: `source|||target`. A preprocessing script (`tokenize.sh`) is provided in case you want to try with your own input. It will run tokenization, BPE segmentation, and additional preprocessing for Romanian. For example:
 
 ```bash
 echo 'Hello world!' | ./tokenize.sh en data-bin/const_levt_en_de/ende.code
