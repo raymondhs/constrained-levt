@@ -5,11 +5,13 @@ This is an extended summary of the ["Lexically Constrained Neural Machine Transl
 
 **Langauges**
 
- - English
- - Japanse
- - Indonesian
- - Tamil
- - Chinese
+ - Summary (English)
+ - 概要 (Japanese)
+ - Ringkasan (Indonesian)
+ - சுருக்கம் (Tamil)
+ - 摘要 (Chinese)
+ - सारांश (Hindi)
+ - Tóm lược (Vietnamese)
 
 
 # Summary (English)
@@ -140,3 +142,55 @@ Pendekatan kami telah berhasil menangani sebuah ceruk kecil, namun sangat pentin
 我们的方法成功地解决了 MT 一个非常小众但又重要的问题：词典感知翻译。非自回归解码，如我们工作中的 LevT，是 NMT 的一个前沿研究课题。我们相信，将来 LevT 架构本身将受益于我们的词典约束法。单词重新排序是我们很乐意探索的一个方向，我们在 ACL-2020 会议期间所遇到的重要研究人员也指出过这一点。另一个有趣的方向是探索各种约束选择策略，这些策略有可能能够处理词汇约束的形态变异。
 
 [Return to top]()
+
+# सारांश (Hindi)
+
+
+लोग अपनी मूल भाषाओं में संवाद करना चाहते हैं और मशीनी अनुवाद को हमारी आभासी बातचीत के विभिन्न हिस्सों में सर्वव्यापी रूप से एकीकृत किया गया है। Rakuten में, हम लोगों और व्यवसायों को वैश्विक स्तर पर उपयोगकर्ताओं तक पहुँचाने के लिए सामग्री का अनुवाद करने के लिए बड़े पैमाने पर मशीन अनुवाद तकनीक का उपयोग करते हैं।
+
+वांछित परिणाम प्राप्त करने के लिए अक्सर, मशीन अनुवाद (MT) को प्रचलित शब्दकोशों के साथ संवर्धित करने की आवश्यकता होती है। उदाहरण के लिए, चीनी वाक्यांश "紅米" (hóng mǐ)  का शाब्दिक अनुवाद लाल चावल से है। हालाँकि, 紅米 brand, स्मार्टफ़ोन ब्रांड, Redmi से संबद्ध कर सकता है। ई-कॉमर्स डोमेन के मामले में, कोई एमटी मॉडल को लाल चावल के बजाय mi Redmi के रूप में अनुवाद करने के लिए बाध्य कर सकता है।
+
+### शाब्दिक बंध लेवेन्शटीन ट्रांसफॉर्मर
+
+हमारे एसीएल 2020 के पेपर में, "लेवेन्शटीन ट्रांसफॉर्मर के साथ शाब्दिक बंध न्यूरल मशीन अनुवाद", हम शब्दकोश-संवर्धित (उर्फ। lexically विवश) NMT को बेहतर बनाने के हमारे प्रयास का वर्णन करते हैं। जी यू इत्यादि  । (2019) ने  लेवेन्शटीन ट्रांसफॉर्मर (LevT) मॉडल पेश किया जो लक्ष्य शब्दों को एक साथ उत्पन्न करता है और उसके बाद पुनरावृत्ति को हटाता है या नए शब्द जोड़ता है। यह ऑटो-रिग्रेसिव एन एम टी मॉडल को रोजगार देने के लोकप्रिय प्रतिमान के विरोध में है जो एक समय में एक अनुवादित शब्द उत्पन्न करता है।
+
+
+हम पीढ़ी के समक्ष शब्दकोश शब्द अनुवादों को सम्मिलित करके शब्दकोश अनुवाद को लागू करने के लिए LevT का विस्तार करते हैं और मॉडल को अंतिम अनुवाद बनाने के लिए इन शब्दकोश शब्दों के समीप शब्दों को जोड़ने या हटाने का निर्णय लेने देते हैं। हम इस कदम को बाधा प्रविष्टि कदम के रूप में संदर्भित करते हैं। हम यह सुनिश्चित करने के लिए इन अवरोध टोकनों पर विलोपन और सम्मिलन संचालन को आगे बढ़ा सकते हैं कि वे अनुवाद आउटपुट में ईमानदारी से दिखाई दें। चूंकि यह कदम केवल अनुमान के आधार पर  होता है, इसलिए हमारे मॉडल को नए प्रचलित शब्दकोशों को फिर से प्रशिक्षित करने की आवश्यकता नहीं है।
+
+### उच्चतर शब्द उपयोग, उच्चतर अनुवाद गुणवत्ता
+
+हमारी  मशीन ट्रांसलेशन पर वर्कशॉप (डब्लूएमटी) 2014 इंग्लिश टू जर्मन ट्रांसलेशन पर हमारे प्रयोग बताते हैं कि यह सरल दृष्टिकोण अनुवाद की गुणवत्ता या गति को नुकसान पहुंचाए बिना 100% शब्द प्रयोग की गारंटी दे सकता है।
+
+हम लेक्सिक रूप से विवश एनएमटी पर पिछले दृष्टिकोणों की तुलना भी करते हैं, जैसे पोस्ट और विलार (2018) और दीनू इत्यादि  । (2019), WMT'17 समाचार परीक्षण सेट के उनके जारी किए गए एनोटेट संस्करण पर। हमारे दृष्टिकोण के विपरीत, दोनों दृष्टिकोण शब्द के उपयोग की गारंटी देने में विफल रहे हैं या शब्द के उपयोग को लागू करने के लिए अनुवाद की गति को पर्याप्त रूप से त्याग दिया है।
+
+### आगे क्या होगा?
+
+हमारे दृष्टिकोण ने सफलतापूर्वक एक बहुत ही आला को संबोधित किया है, फिर भी एमटी में एक महत्वपूर्ण समस्या है: शब्दकोश-जागरूक अनुवाद। हमारे काम में नॉन ऑटोरेग्रेसिव डिकोडिंग जैसेLevT, एनएमटी में एक अत्याधुनिक शोध विषय है। हमारा मानना है कि लेक्सिक वास्तुकला में भविष्य के सुधार से हमारे शाब्दिक बाधा दृष्टिकोण को लाभ होगा। एक दिशा जिसे हम तलाशने के लिए उत्साहित होंगे, शब्द रिऑर्डरिंग से संबंधित है, क्योंकि यह महत्वपूर्ण शोधकर्ताओं द्वारा इंगित किया गया है जो हमे पूरे ACL-2020 सम्मेलन में मिले थे। एक और दिलचस्प दिशा विभिन्न बाधा चयन रणनीतियों का पता लगाने के लिए है, जो संभावित रूप से बाधाओं के रूपात्मक रूपों को संभाल सकती है।
+
+[Return to top]()
+
+
+# Tóm lược (Vietnamese)
+
+Mọi người muốn giao tiếp bằng tiếng mẹ đẻ và dịch máy đã được tích hợp rộng khắp vào các khía cạnh tương tác ảo khác nhau của chúng ta. Tại Rakuten, chúng tôi sử dụng công nghệ dịch máy một cách rộng rãi để giúp mọi người và doanh nghiệp có khả năng dịch nội dung để tiếp cận người dùng trên toàn cầu.
+
+Thông thường, dịch máy (MT) cần được tăng cường với từ điển tùy chỉnh để có được kết quả mong muốn. Ví dụ: cụm từ tiếng Trung "紅米" (hồng mễ) dịch theo nghĩa đen là gạo lứt. Tuy nhiên, 紅米 cũng có thể đề cập đến thương hiệu điện thoại thông minh Redmi. Trong trường hợp này của lĩnh vực thương mại điện tử, người ta có thể muốn ràng buộc mô hình MT để dịch 紅米 là Redmi chứ không phải là gạo lứt.
+
+### Phép biến đổi Levenshtein bị ràng buộc về từ vựng
+
+Trong bài báo ACL 2020 của mình, "Dịch máy bằng nơ-ron với Phép biến đổi Levenshtein bị ràng buộc về từ vựng", chúng tôi mô tả nỗ lực để cải thiện NMT được tăng cường từ điển (còn gọi là bị ràng buộc về từ vựng) của mình. Gu cùng các cộng sự (2019) đã giới thiệu mô hình Phép biến đổi Levenshtein (LevT) vốn tạo ra các từ đích một cách đồng thời và sau đó lặp đi lặp lại quá trình xóa hoặc thêm từ mới. Mô hình này trái ngược với mô thức phổ biến về việc sử dụng các mô hình NMT tự hồi quy vốn tạo ra từng từ được dịch một.
+
+Chúng tôi mở rộng LevT để thực hiện các bản dịch từ điển bằng cách chèn các bản dịch thuật ngữ từ điển trước khi tạo và cho mô hình đưa ra quyết định thêm hoặc xóa các từ xoay quanh các thuật ngữ từ điển này để tạo bản dịch cuối cùng. Chúng tôi gọi bước này là bước chèn ràng buộc. Ngoài ra, chúng tôi có thể không cho phép các thao tác xóa và chèn đối với các token ràng buộc này để đảm bảo rằng chúng xuất hiện chính xác trong bản dịch đầu ra. Vì bước này chỉ diễn ra khi suy luận, mô hình của chúng tôi không cần phải được đào tạo lại với các từ điển tùy chỉnh mới.
+
+### Sử dụng nhiều thuật ngữ hơn, chất lượng dịch cao hơn
+
+Các thử nghiệm của chúng tôi tại Hội thảo về Dịch Máy (WMT) năm 2014 bản dịch tiếng Anh sang tiếng Đức cho thấy phương pháp đơn giản này có thể đảm bảo việc sử dụng 100% thuật ngữ từ điển mà không làm giảm chất lượng hoặc tốc độ dịch.
+
+Chúng tôi cũng so sánh với các phương pháp trước đây về NMT bị ràng buộc về từ vựng, chẳng hạn như Post và Vilar (2018) và Dinu cùng các cộng sự (2019), trên phiên bản có chú thích của bộ thử nghiệm tin tức WMT'17 mà họ đã phát hành. Không giống như phương pháp của chúng tôi, cả hai phương pháp đó đều không đảm bảo việc sử dụng thuật ngữ hoặc đã hy sinh đáng kể tốc độ dịch để thực hiện việc sử dụng thuật ngữ.
+
+### Tiếp theo là gì?
+
+Phương pháp của chúng tôi đã giải quyết thành công một vấn đề rất đặc thù nhưng quan trọng trong MT: dịch thuật chú ý đến từ điển. Giải mã không tự hồi quy, chẳng hạn như LevT trong công trình của chúng tôi, là một chủ đề nghiên cứu tiên tiến trong NMT. Chúng tôi tin rằng phương pháp ràng buộc từ vựng của mình sẽ được hưởng lợi từ những cải tiến sau này trong chính kiến trúc LevT. Một hướng đi mà chúng tôi rất muốn nghiên cứu có liên quan đến việc sắp xếp lại từ, như đã được chỉ ra bởi các nhà nghiên cứu phê phán mà chúng tôi đã gặp trong suốt hội nghị ACL-2020. Một hướng đi thú vị khác là nghiên cứu các chiến lược lựa chọn ràng buộc khác nhau, vốn có khả năng xử lý các biến thể hình thái của các ràng buộc.
+
+[Return to top]()
+
